@@ -47,8 +47,10 @@ void customer(void *arg){
     pthread_mutex_lock(&lock);
     no_of_free_clerks = no_of_free_clerks + 1;
     printf("Customer #'%d' leaves the office \n", times1->customer_id);
-    pthread_cond_signal(&lock);
-    pthread_cond_broadcast(&ok);
+    no_of_customers_serviced = no_of_customers_serviced + 1;
+    pthread_cond_signal(&ok);
+
+//    pthread_cond_broadcast(&ok);
     pthread_mutex_unlock(&lock);
 }
 
