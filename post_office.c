@@ -5,56 +5,99 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <pthread.h>
+#include <string.h>
+#include <unistd.h>
+#include <signal.h>
 
 
-    void print_message_function(void *ptr);
+static int no_of_free_clerks;
+static int no_of_customers_arrived;
+static int no_of_customers_waited;
+static int no_of_customers_serviced;
 
-     int main(int argc, char* argv[]){
+int total_customers = 0;
 
-         printf("Number of clerks: %d \n", atoi(argv[1]));
+static pthread_cond_t ok = PTHREAD_COND_INITIALIZER;
+static pthread_mutex_t lock ;
 
-        FILE *fp;
-        char c[1000];
+struct times{
+    int customer_id;
+    int wait_time;
+    int process_time;
+};
 
-        fp = fopen("./Sample.txt","r");
+void customer(void *arg){
 
-        if(fp == NULL){
-            return -1;
-        }else{
+    struct times *times1;
+    times1 = (struct times *)arg;
 
-            while(fgets(c, sizeof(c),fp) != NULL){
-                printf("%s", c);
-            }
-            fclose(fp);
-        }
+    pthread_mutex_lock(&lock);
+    no_of_customers_arrived = no_of_customers_arrived + 1;
+    printf("Customer #'%d' arrives at the post office. \n", times1->customer_id);
+    while(no_of_free_clerks == 0){
+        no_of_customers_waited = no_of_customers_waited + 1;
+        pthread_cond_wait(&ok, &lock);
+    }
+    printf("Customer #'%d' starts getting helped. \n", times1->customer_id);
+    no_of_free_clerks = no_of_free_clerks -1;
+    pthread_mutex_unlock(&lock);
+
+    sleep(times1->process_time);
+
+    pthread_mutex_lock(&lock);
+    no_of_free_clerks = no_of_free_clerks + 1;
+    printf("Customer #'%d' leaves the office \n", times1->customer_id);
+    pthread_cond_signal(&lock);
+    pthread_cond_broadcast(&ok);
+    pthread_mutex_unlock(&lock);
+}
 
 
 
-//         pthread_t thread1, thread2;
-//         char *message1 = "This is First Thread";
-//         char *message2 = "This is Second Thread";
-//         int returnThread1, returnThread2;
-//
-//         //independent threads
-//         returnThread1 = pthread_create(&thread1, NULL, print_message_function,(void *) message1);
-//         returnThread2 = pthread_create(&thread2, NULL, print_message_function, (void *) message2);
-//
-//         pthread_join(thread1, NULL);
-//         pthread_join(thread2, NULL);
-//
-//         printf("Thread 1 returns: %d \n",returnThread1);
-//         printf("Thread 2 returns: %d \n",returnThread2);
-//
-         return 0;
-//
-//
+int main(int argc, char* argv[]){
 
+    printf("Number of clerks: %d \n", atoi(argv[1]));
+    no_of_free_clerks = atoi(argv[1]);
+
+    if(pthread_mutex_init(&lock, NULL) !=0){
+        printf("Mutex init failed \n");
+        return  -1;
     }
 
-void print_message_function(void *ptr){
-    char *message;
-    message = (char *)ptr;
-    printf("%s \n",message);
+
+    struct times times1[500];
+
+    int customerId, waitTime, processTime;
+    pthread_t threadId;
+    pthread_t customer_ids[500];
+    while(scanf("%d %d %d", &customerId, &waitTime, &processTime)>0){
+
+        total_customers += 1;
+
+        times1[total_customers-1].customer_id = customerId;
+        times1[total_customers-1].process_time = processTime;
+        times1[total_customers-1].wait_time = waitTime;
+
+        if(waitTime == 0){
+            pthread_create(&threadId, NULL, customer, &times1[total_customers-1]);
+        }else{
+            sleep(waitTime);
+            pthread_create(&threadId, NULL, customer, &times1[total_customers-1]);
+        }
+        customer_ids[total_customers-1] = threadId;
+    }
+
+    int a;
+
+    for(a=0; a<total_customers; a++){
+        pthread_join(customer_ids[a], NULL);
+    }
+    printf("'%d' customer(s) went serviced \n", total_customers);
+    printf("'%d' customer(s) had to wait \n", no_of_customers_waited);
+    printf("'%d' customer(s) did not have to wait \n", total_customers-no_of_customers_waited);
+
+
+    return 0;
 }
 
 
